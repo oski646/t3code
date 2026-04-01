@@ -115,6 +115,32 @@ describe("derivePendingApprovals", () => {
     ]);
   });
 
+  it("maps dynamic_tool_call requestType into mcp pending approval", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "approval-open-mcp",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        kind: "approval.requested",
+        summary: "MCP tool approval requested",
+        tone: "approval",
+        payload: {
+          requestId: "req-mcp",
+          requestType: "dynamic_tool_call",
+          detail: "mcp_tool_name",
+        },
+      }),
+    ];
+
+    expect(derivePendingApprovals(activities)).toEqual([
+      {
+        requestId: "req-mcp",
+        requestKind: "mcp",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        detail: "mcp_tool_name",
+      },
+    ]);
+  });
+
   it("clears stale pending approvals when provider reports unknown pending request", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

@@ -12,7 +12,7 @@ import {
   TrimmedNonEmptyString,
   TurnId,
 } from "./baseSchemas";
-import { ProviderKind } from "./orchestration";
+import { ProviderKind, type ProviderRequestKind } from "./orchestration";
 
 const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
 const UnknownRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
@@ -140,6 +140,15 @@ export const CanonicalRequestType = Schema.Literals([
   "unknown",
 ]);
 export type CanonicalRequestType = typeof CanonicalRequestType.Type;
+
+export const REQUEST_TYPE_TO_KIND: Partial<Record<CanonicalRequestType, ProviderRequestKind>> = {
+  command_execution_approval: "command",
+  exec_command_approval: "command",
+  file_read_approval: "file-read",
+  file_change_approval: "file-change",
+  apply_patch_approval: "file-change",
+  dynamic_tool_call: "mcp",
+};
 
 const ProviderRuntimeEventType = Schema.Literals([
   "session.started",

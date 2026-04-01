@@ -8,6 +8,9 @@ import {
   type ToolLifecycleItemType,
   type UserInputQuestion,
   type ThreadId,
+  ProviderRequestKind,
+  REQUEST_TYPE_TO_KIND,
+  type CanonicalRequestType,
   type TurnId,
 } from "@t3tools/contracts";
 
@@ -52,7 +55,7 @@ interface DerivedWorkLogEntry extends WorkLogEntry {
 
 export interface PendingApproval {
   requestId: ApprovalRequestId;
-  requestKind: "command" | "file-read" | "file-change";
+  requestKind: ProviderRequestKind;
   createdAt: string;
   detail?: string;
 }
@@ -150,19 +153,16 @@ export function deriveActiveWorkStartedAt(
   return sendStartedAt;
 }
 
-function requestKindFromRequestType(requestType: unknown): PendingApproval["requestKind"] | null {
-  switch (requestType) {
-    case "command_execution_approval":
-    case "exec_command_approval":
-      return "command";
-    case "file_read_approval":
-      return "file-read";
-    case "file_change_approval":
-    case "apply_patch_approval":
-      return "file-change";
-    default:
-      return null;
+const VALID_REQUEST_KINDS = new Set<string>(ProviderRequestKind.literals);
+
+function extractRequestKind(payload: Record<string, unknown>): ProviderRequestKind | null {
+  if (typeof payload.requestKind === "string" && VALID_REQUEST_KINDS.has(payload.requestKind)) {
+    return payload.requestKind as ProviderRequestKind;
   }
+  if (typeof payload.requestType === "string") {
+    return REQUEST_TYPE_TO_KIND[payload.requestType as CanonicalRequestType] ?? null;
+  }
+  return null;
 }
 
 function isStalePendingRequestFailureDetail(detail: string | undefined): boolean {
@@ -194,15 +194,7 @@ export function derivePendingApprovals(
       payload && typeof payload.requestId === "string"
         ? ApprovalRequestId.makeUnsafe(payload.requestId)
         : null;
-    const requestKind =
-      payload &&
-      (payload.requestKind === "command" ||
-        payload.requestKind === "file-read" ||
-        payload.requestKind === "file-change")
-        ? payload.requestKind
-        : payload
-          ? requestKindFromRequestType(payload.requestType)
-          : null;
+    const requestKind = payload ? extractRequestKind(payload) : null;
     const detail = payload && typeof payload.detail === "string" ? payload.detail : undefined;
 
     if (activity.kind === "approval.requested" && requestId && requestKind) {
@@ -701,14 +693,7 @@ function extractWorkLogItemType(
 function extractWorkLogRequestKind(
   payload: Record<string, unknown> | null,
 ): WorkLogEntry["requestKind"] | undefined {
-  if (
-    payload?.requestKind === "command" ||
-    payload?.requestKind === "file-read" ||
-    payload?.requestKind === "file-change"
-  ) {
-    return payload.requestKind;
-  }
-  return requestKindFromRequestType(payload?.requestType) ?? undefined;
+  return (payload ? extractRequestKind(payload) : null) ?? undefined;
 }
 
 function pushChangedFile(target: string[], seen: Set<string>, value: unknown) {

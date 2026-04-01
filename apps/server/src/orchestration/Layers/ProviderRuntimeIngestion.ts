@@ -1,6 +1,8 @@
 import {
   ApprovalRequestId,
+  APPROVAL_REQUEST_LABELS,
   type AssistantDeliveryMode,
+  REQUEST_TYPE_TO_KIND,
   CommandId,
   MessageId,
   type OrchestrationEvent,
@@ -141,23 +143,6 @@ function orchestrationSessionStatusFromRuntimeState(
   }
 }
 
-function requestKindFromCanonicalRequestType(
-  requestType: string | undefined,
-): "command" | "file-read" | "file-change" | undefined {
-  switch (requestType) {
-    case "command_execution_approval":
-    case "exec_command_approval":
-      return "command";
-    case "file_read_approval":
-      return "file-read";
-    case "file_change_approval":
-    case "apply_patch_approval":
-      return "file-change";
-    default:
-      return undefined;
-  }
-}
-
 function runtimeEventToActivities(
   event: ProviderRuntimeEvent,
 ): ReadonlyArray<OrchestrationThreadActivity> {
@@ -169,27 +154,20 @@ function runtimeEventToActivities(
   })();
   switch (event.type) {
     case "request.opened": {
-      if (event.payload.requestType === "tool_user_input") {
+      const requestKind = REQUEST_TYPE_TO_KIND[event.payload.requestType];
+      if (!requestKind) {
         return [];
       }
-      const requestKind = requestKindFromCanonicalRequestType(event.payload.requestType);
       return [
         {
           id: event.eventId,
           createdAt: event.createdAt,
           tone: "approval",
           kind: "approval.requested",
-          summary:
-            requestKind === "command"
-              ? "Command approval requested"
-              : requestKind === "file-read"
-                ? "File-read approval requested"
-                : requestKind === "file-change"
-                  ? "File-change approval requested"
-                  : "Approval requested",
+          summary: APPROVAL_REQUEST_LABELS[requestKind],
           payload: {
             requestId: toApprovalRequestId(event.requestId),
-            ...(requestKind ? { requestKind } : {}),
+            requestKind,
             requestType: event.payload.requestType,
             ...(event.payload.detail ? { detail: truncateDetail(event.payload.detail) } : {}),
           },
@@ -200,10 +178,10 @@ function runtimeEventToActivities(
     }
 
     case "request.resolved": {
-      if (event.payload.requestType === "tool_user_input") {
+      const requestKind = REQUEST_TYPE_TO_KIND[event.payload.requestType];
+      if (!requestKind) {
         return [];
       }
-      const requestKind = requestKindFromCanonicalRequestType(event.payload.requestType);
       return [
         {
           id: event.eventId,
@@ -213,7 +191,7 @@ function runtimeEventToActivities(
           summary: "Approval resolved",
           payload: {
             requestId: toApprovalRequestId(event.requestId),
-            ...(requestKind ? { requestKind } : {}),
+            requestKind,
             requestType: event.payload.requestType,
             ...(event.payload.decision ? { decision: event.payload.decision } : {}),
           },
